@@ -1,114 +1,202 @@
 package amazon;
 
-import java.time.Duration;
-import org.junit.jupiter.api.Test;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import io.github.bonigarcia.wdm.WebDriverManager;
+import io.github.cdimascio.dotenv.Dotenv;
+import org.junit.jupiter.api.*;
+import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
-import io.github.bonigarcia.wdm.WebDriverManager;
+
+import java.time.Duration;
 
 public class AwsTest {
 
-    public static String browser = "Edge";
+    static Dotenv dotenv = Dotenv.configure()
+            .directory("/home/mazinini/Desktop/automation-selenium/amazon/.env")
+            .load();
 
-    private WebDriver setupBrowser() {
-        if (browser.equalsIgnoreCase("Firefox")) {
-            WebDriverManager.firefoxdriver().setup();
-            return new FirefoxDriver();
-        } else if (browser.equalsIgnoreCase("Chrome")) {
-            WebDriverManager.chromedriver().setup();
-            return new ChromeDriver();
-        } else if (browser.equalsIgnoreCase("Edge")) {
-            WebDriverManager.edgedriver().setup();
-            return new EdgeDriver();
-        } else {
-            throw new RuntimeException("Unsupported browser: " + browser);
+    static String email = dotenv.get("EMAIL");
+    static String password = dotenv.get("PASSWORD");
+    public static String browser = "Edge";
+    private WebDriver driver;
+    private WebDriverWait wait;
+
+    @BeforeEach
+    public void setup() {
+        switch (browser.toLowerCase()) {
+            case "firefox":
+                WebDriverManager.firefoxdriver().setup();
+                driver = new FirefoxDriver();
+                break;
+            case "chrome":
+                WebDriverManager.chromedriver().setup();
+                driver = new ChromeDriver();
+                break;
+            case "edge":
+                WebDriverManager.edgedriver().setup();
+                driver = new EdgeDriver();
+                break;
+            default:
+                throw new RuntimeException("Unsupported browser: " + browser);
+        }
+
+        wait = new WebDriverWait(driver, Duration.ofSeconds(30));
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
+        driver.manage().window().maximize();
+        driver.manage().deleteAllCookies();
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
         }
     }
 
     @Test
     public void testAmazonRouterSearch() {
-        WebDriver driver = null;
-
         try {
-            driver = setupBrowser();
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
-
-            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
-            driver.manage().window().maximize();
             driver.get("https://www.amazon.in/");
-            driver.manage().deleteAllCookies();
+            System.out.println(" Searching for TP-Link Router on Amazon...");
 
-            System.out.println("Searching for TP-Link Router on Amazon...");
             WebElement searchBox = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("twotabsearchtextbox")));
             searchBox.sendKeys("TP-Link Router");
 
             WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("nav-search-submit-button")));
             submitButton.click();
 
-        } finally {
-            if (driver != null) {
-                driver.quit();
-            }
+        } catch (TimeoutException e) {
+            System.err.println("Page took too long to load or element not found.");
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
     @Test
     public void testIncredibleRouterSearch() {
-        WebDriver driver = null;
-
         try {
-            driver = setupBrowser();
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+            driver.get("https://www.incredible.co.za/customer/account/login/");
 
-            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
-            driver.manage().window().maximize();
-            driver.get("https://www.incredible.co.za/");
-            driver.manage().deleteAllCookies();
+            WebElement emailField = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("email")));
+            emailField.sendKeys(email);
 
-            System.out.println("Searching for TP-Link Router on Incredible...");
-            WebElement searchBox = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("search")));
-            searchBox.sendKeys("TP-Link M7350 LTE- Mobile WIFI Router");
+            WebElement passwordField = driver.findElement(By.id("pass"));
+            passwordField.sendKeys(password);
 
-            WebElement submitButton = wait.until(ExpectedConditions.elementToBeClickable(
-                    By.xpath("//form[@id='search_mini_form']//button[@title='Search']")));
-            submitButton.click();
+            WebElement loginButton = driver.findElement(By.id("send2"));
+            loginButton.click();
 
-        } finally {
-            if (driver != null) {
-                driver.quit();
+            wait.until(ExpectedConditions.urlContains("/customer/account"));
+            System.out.println("✅ Login successful!");
+
+            // Visit product page and add item to cart
+            driver.get("https://www.incredible.co.za/tp-link-m7350-lte-mobile-wifi-router");
+            WebElement addToCartBtn = wait.until(ExpectedConditions.elementToBeClickable(By.xpath("//button[@title='Add to Cart']")));
+
+            AddCart.addItemMultipleTimes(driver, wait, addToCartBtn, 3);
+            System.out.println("Added router to cart.");
+
+            // Open cart
+            try {
+                WebElement cartIcon = wait.until(ExpectedConditions.elementToBeClickable(
+                        By.xpath("//*[@id='html-body']/div[5]/header/div[1]/div[1]/div[3]/div[2]/a/span[1]")
+                ));
+                cartIcon.click();
+                System.out.println("Opened cart.");
+            } catch (TimeoutException e) {
+                System.err.println("Cart icon not found or not clickable.");
+                e.printStackTrace();
             }
-        }
-    }
 
-    @Test
-    public void testAwsHomepageLoad() {
-        WebDriver driver = null;
+            // Proceed to checkout
+            WebElement checkoutButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("top-cart-btn-checkout")));
+            checkoutButton.click();
+            System.out.println("✅ Clicked on checkout.");
+            Thread.sleep(5000);
 
-        try {
-            driver = setupBrowser();
-            WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
 
-            driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(60));
-            driver.manage().window().maximize();
-            driver.get("https://aws.amazon.com/");
-            driver.manage().deleteAllCookies();
+            try {
+                Thread.sleep(3000);
 
-            System.out.println("Verifying AWS homepage...");
-            WebElement createAccountBtn = wait.until(ExpectedConditions.visibilityOfElementLocated(
-                    By.xpath("//a[contains(text(),'Create an AWS Account')]")));
+                if (driver.findElements(By.id("customer-email")).size() > 0) {
+                    WebElement emailInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("customer-email")));
+                    emailInput.clear();
+                    emailInput.sendKeys(email);
 
-            System.out.println("AWS homepage loaded successfully. Found button: " + createAccountBtn.getText());
+                    WebElement passwordInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("pass")));
+                    passwordInput.clear();
+                    passwordInput.sendKeys(password);
 
-        } finally {
-            if (driver != null) {
-                driver.quit();
+                    WebElement signInButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("send2")));
+                    signInButton.click();
+                    System.out.println("Signed in during checkout.");
+                } else {
+                    System.out.println("No checkout sign-in form displayed (possibly already signed in).");
+                }
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } catch (Exception e) {
+                System.err.println("Error handling checkout login.");
+                e.printStackTrace();
             }
+
+
+            try {
+                WebElement decreaseItem = driver.findElement(By.xpath("//*[@id='mini-cart']/li/div/div/div[1]/div[2]/div/button[1]/span"));
+                decreaseItem.click();
+                decreaseItem.click();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            driver.get("https://www.incredible.co.za/checkout/#shipping");
+            WebElement link = driver.findElement(By.xpath("//*[@id='maincontent']/div[2]/div/div[2]/p[2]/a"));
+            link.click();
+
+            System.out.println("Link clicked successfully.");
+
+
+            WebElement secondShippingOption = wait.until(ExpectedConditions.elementToBeClickable(
+                    By.xpath("//*[@id='checkout-shipping-method-load']/table/tbody/tr[2]/td/div[1]/div/div[2]")
+            ));
+            secondShippingOption.click();
+
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            try {
+                WebElement shippingMethodBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                        By.xpath("//*[@id='checkout-shipping-method-load']/table/tbody/tr[2]/td/div[1]/div/div[1]/button[2]/span")
+                ));
+                shippingMethodBtn.click();
+                System.out.println("Selected shipping method.");
+            } catch (TimeoutException e) {
+                System.err.println("❌ Shipping method selection took too long.");
+                e.printStackTrace();
+            }
+
+
+            try {
+                WebElement continueToPaymentBtn = wait.until(ExpectedConditions.elementToBeClickable(
+                        By.xpath("//*[@id='opc-sidebar']/div[1]/div[1]/button/span")
+                ));
+                continueToPaymentBtn.click();
+                System.out.println(" Continued to payment.");
+            } catch (TimeoutException e) {
+                System.err.println("Continue to Payment' button not found.");
+                e.printStackTrace();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }
